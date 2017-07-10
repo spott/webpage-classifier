@@ -162,9 +162,13 @@ async def write_post_to_db(pool: Type[asyncpg.pool.Pool],
             m = which_not_null_regex.match(str(not_null))
             if m.group(1) == "domain":
                 log.info("domain: {} doesn't exist".format(domain))
-                await connection.execute(
-                    '''INSERT INTO "domains" (name) VALUES ($1)''', domain)
-                log.info("domain: {} added to table, inserting {} into urls table now:".format(domain, url[:20]))
+                try:
+                    await connection.execute(
+                        '''INSERT INTO "domains" (name) VALUES ($1)''', domain)
+                    log.info("domain: {} added to table, inserting {} into urls table now:".format(domain, url[:20]))
+                except asyncpg.UniqueViolationError as unique:
+                    log.info("domain {} got added between last time we checked and now... so we will just ignore this".format(domain))
+                    pass
                 await connection.execute('''
                     INSERT INTO "urls" (name, domain, html, article) VALUES \
                         ($1, (SELECT domain FROM domains WHERE name = $2), $3, $4)
