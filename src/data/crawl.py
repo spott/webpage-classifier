@@ -99,6 +99,10 @@ async def parse_html(session, url: str):
         log.info("url: {}... probably doesn't exist: {}".format(url[:40], e))
         return ("", "")
 
+    except aiohttp.ClientOSError as e:
+        log.info("url: {}... connection reset: {}".format(url[:40], e))
+        return ("", "")
+
     except aiohttp.client_exceptions.ServerDisconnectedError as e:
         log.info("url: {}... probably doesn't exist: {}".format(url[:40], e))
         return ("", "")
