@@ -91,6 +91,14 @@ async def parse_html(session, url: str):
         log.info("url: {}... returned garbage utf-8 string: e".format(url[:40], e))
         return ("", "")
 
+    except LookupError as e:
+        log.info("url: {}... couldn't get encoding: e".format(url[:40], e))
+        return ("", "")
+
+    except ValueError as e:
+        log.info("url: {}... doesn't seem to be a url: e".format(url[:40], e))
+        return ("", "")
+
     except asyncio.TimeoutError as t:
         log.info("url: {}... timed out: {}".format(url[:40], t))
         return ("", "")
@@ -111,6 +119,9 @@ async def parse_html(session, url: str):
         log.info("url: {}... {}".format(url[:40], e))
         return ("", "")
 
+    except aiohttp.client_exceptions.ClientPayloadError as e:
+        log.info("url: {}... {}".format(url[:40], e))
+        return ("", "")
 
     log.info("html: (type: {}): {}...".format(type(html), html[:20]))
     try:
@@ -173,10 +184,14 @@ async def write_post_to_db(pool: Type[asyncpg.pool.Pool],
                 except asyncpg.UniqueViolationError as unique:
                     log.info("domain {} got added between last time we checked and now... so we will just ignore this".format(domain))
                     pass
-                await connection.execute('''
-                    INSERT INTO "urls" (name, domain, html, article) VALUES \
-                        ($1, (SELECT domain FROM domains WHERE name = $2), $3, $4)
-                ''', url, domain, html, article)
+                try:
+                    await connection.execute('''
+                        INSERT INTO "urls" (name, domain, html, article) VALUES \
+                            ($1, (SELECT domain FROM domains WHERE name = $2), $3, $4)
+                    ''', url, domain, html, article)
+                except UniqueViolationError as e:
+                    log.debug("url {} has already been added, but we got here.  Not sure what happened. not_null error: {}, unique error: {}".format(url, not_null, e))
+                    return
             else:
                 raise not_null
 
