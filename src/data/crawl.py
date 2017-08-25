@@ -89,39 +89,39 @@ async def parse_html(session, url: str):
         html = await fetch(session, url)
     except UnicodeDecodeError as e:
         log.info("url: {}... returned garbage utf-8 string: e".format(url[:40], e))
-        return ("", "")
+        raise
 
     except LookupError as e:
         log.info("url: {}... couldn't get encoding: e".format(url[:40], e))
-        return ("", "")
+        raise
 
     except ValueError as e:
         log.info("url: {}... doesn't seem to be a url: e".format(url[:40], e))
-        return ("", "")
+        raise
 
     except asyncio.TimeoutError as t:
         log.info("url: {}... timed out: {}".format(url[:40], t))
-        return ("", "")
+        raise
 
     except aiohttp.ClientResponseError as e:
         log.info("url: {}... probably doesn't exist: {}".format(url[:40], e))
-        return ("", "")
+        raise
 
     except aiohttp.ClientOSError as e:
         log.info("url: {}... connection reset: {}".format(url[:40], e))
-        return ("", "")
+        raise
 
     except aiohttp.client_exceptions.ServerDisconnectedError as e:
         log.info("url: {}... probably doesn't exist: {}".format(url[:40], e))
-        return ("", "")
+        raise
 
     except aiohttp.client_exceptions.ClientConnectorError as e:
         log.info("url: {}... {}".format(url[:40], e))
-        return ("", "")
+        raise
 
     except aiohttp.client_exceptions.ClientPayloadError as e:
         log.info("url: {}... {}".format(url[:40], e))
-        return ("", "")
+        raise
 
     log.info("html: (type: {}): {}...".format(type(html), html[:20]))
     try:
@@ -130,7 +130,7 @@ async def parse_html(session, url: str):
         ar.parse()
     except article.ArticleException as e:
         log.info("url: {}... failed to be understood.. {}".format(url[:40],e))
-        return ("", "")
+        raise
     return (bytes(html, "utf8"), ar.article_html)
 
 
@@ -228,9 +228,15 @@ async def write_post_to_db(pool: Type[asyncpg.pool.Pool],
 # ===================
 async def is_post_in_db(pool: Type[asyncpg.pool.Pool],
                         id_: str,
-                        subreddit: str):
+                        subreddit: str, url: str):
     log = logging.getLogger('is_post_in_db')
-    log.info("checking [id: {}, subreddit: {}]".format(id_, subreddit))
+    log.info("checking [id: {}, subreddit: {}, url: {}...]".format(id_, subreddit, url[:40]))
+    # is the url bad:
+    results = await pool.fetch("""SELECT * FROM bad_urls WHERE url = $1""", url)
+    if results:
+        log.info("url: {}... already tried and failed".format(url))
+        return results
+
     # get subreddit:
     #async with pool.acquire() as connection:
     subreddit_id = await pool.fetchrow(
@@ -311,10 +317,18 @@ async def process_post(post, pg_pool, http_session=None):
     log = logging.getLogger('process_post({})'.format(post))
     if not http_session:
         async with aiohttp.ClientSession() as http_session:
-            if not await is_post_in_db(pg_pool, post.id, post.subreddit):
-                html, article = await parse_html(http_session, post.url)
-                if article != "":
-                    await write_post_to_db(pg_pool, *post, html, article)
+            if not await is_post_in_db(pg_pool, post.id, post.subreddit, post.url):
+                try:
+                    html, article = await parse_html(http_session, post.url)
+                    if article != "":
+                        await write_post_to_db(pg_pool, *post, html, article)
+                except KeyboardInterrupt:
+                    raise
+                except Exception as e:
+                    async with pg_pool.acquire() as connection:
+                        log.info("url was bad, inserting into 'bad_urls'")
+                        await connection.execute('''INSERT INTO "bad_urls" (url, error) VALUES ($1, $2)''', post.url, repr(e))
+
     else:
         if not await is_post_in_db(pg_pool, post.id, post.subreddit):
             html, article = await parse_html(http_session, post.url)
