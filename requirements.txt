@@ -70,7 +70,7 @@ lxml==3.8.0
 matplotlib==2.0.2
 multidict==3.0.0
 newspaper3k==0.2.2
-nltk==3.2.4
+nltk==3.4.5
 numpy==1.13.0
 oauth2client==4.1.1
 olefile==0.44
