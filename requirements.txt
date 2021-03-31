@@ -66,7 +66,7 @@ jedi==0.10.0
 jieba3k==0.35.1
 jupyter-client==5.0.1
 jupyter-core==4.3.0
-lxml==3.8.0
+lxml==4.6.3
 matplotlib==2.0.2
 multidict==3.0.0
 newspaper3k==0.2.2
