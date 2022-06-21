@@ -71,7 +71,7 @@ matplotlib==2.0.2
 multidict==3.0.0
 newspaper3k==0.2.2
 nltk==3.2.4
-numpy==1.13.0
+numpy==1.22.0
 oauth2client==4.1.1
 olefile==0.44
 pandas==0.20.2
